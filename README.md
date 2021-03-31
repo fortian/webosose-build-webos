@@ -25,16 +25,17 @@ Prerequisites
 =============
 Before you can build, you will need some tools.  If you try to build without them, bitbake will fail a sanity check and tell you what's missing, but not really how to get the missing pieces. On Ubuntu, you can force all of the missing pieces to be installed by entering:
 
+    $ cd build-webos
     $ sudo scripts/prerequisites.sh
 
-Also, the bitbake sanity check will issue a warning if you're not running under Ubuntu 14.04 64bit LTS.
+Also, the bitbake sanity check will issue a warning if you're not running under Ubuntu 18.04 64bit LTS.
 
 
 Building
 ========
-To configure the build for the raspberrypi3 and to fetch the sources:
+To configure the build for the raspberrypi4 and to fetch the sources:
 
-    $ ./mcf -p 0 -b 0 raspberrypi3
+    $ ./mcf -p 0 -b 0 raspberrypi4
 
 The `-p 0` and `-b 0` options set the make and bitbake parallelism values to the number of CPU cores found on your computer.
 
@@ -44,6 +45,7 @@ To kick off a full build of webOS OSE, make sure you have at least 100GB of disk
 
 This may take in the neighborhood of two hours on a multi-core workstation with a fast disk subsystem and lots of memory, or many more hours on a laptop with less memory and slower disks or in a VM.
 
+If you need more information about the build, please see the build guide on the webOS OSE website(webosose.org).
 
 Images
 ======
@@ -60,7 +62,7 @@ To blow away the build artifacts and prepare to do clean build, you can remove t
     $ rm -rf BUILD
     $ ./mcf.status
 
-What this retains are the caches of downloaded source (under `./downloads`) and shared state (under `./sstate-cache`). These caches will save you a tremendous amount of time during development as they facilitate incremental builds, but can cause seemingly inexplicable behavior when corrupted. If you experience strangeness, use the command presented below to remove the shared state of suspicious components. In extreme cases, you may need to remove the entire shared state cache. See [here](http://www.yoctoproject.org/docs/latest/overview-manual/overview-manual.html#shared-state-cache) for more information on it.
+What this retains are the caches of downloaded source (under `./downloads`) and shared state (under `./sstate-cache`). These caches will save you a tremendous amount of time during development as they facilitate incremental builds, but can cause seemingly inexplicable behavior when corrupted. If you experience strangeness, use the command presented below to remove the shared state of suspicious components. In extreme cases, you may need to remove the entire shared state cache. See [here](https://www.yoctoproject.org/docs/current/ref-manual/ref-manual.html#shared-state-cache) for more information on it.
 
 
 Building Individual Components
@@ -83,21 +85,14 @@ The script automates the process of adding new OE layers to the build environmen
 
 Copyright and License Information
 =================================
-Unless otherwise specified, all content, including all source code files and
-documentation files in this repository are:
+Unless otherwise specified, all content, including all source code files and documentation files in this repository are:
 
-Copyright (c) 2008-2018 LG Electronics, Inc.
+Copyright (c) 2008-2019 LG Electronics, Inc.
 
-Unless otherwise specified or set forth in the NOTICE file, all content,
-including all source code files and documentation files in this repository are:
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this content except in compliance with the License.
-You may obtain a copy of the License at
+All content, including all source code files and documentation files in this repository except otherwise noted are: Licensed under the Apache License, Version 2.0 (the "License"); you may not use this content except in compliance with the License. You may obtain a copy of the License at
 
 http://www.apache.org/licenses/LICENSE-2.0
 
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
+Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
+
+SPDX-License-Identifier: Apache-2.0

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Copyright (c) 2013-2017 LG Electronics, Inc.
+# Copyright (c) 2013-2021 LG Electronics, Inc.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -18,9 +18,9 @@
 #set -x
 
 # Some constants
-SCRIPT_VERSION="6.10.2c"
+SCRIPT_VERSION="6.10.11"
 SCRIPT_NAME=`basename $0`
-AUTHORITATIVE_OFFICIAL_BUILD_SITE="svl"
+AUTHORITATIVE_OFFICIAL_BUILD_SITE="rpt"
 
 BUILD_REPO="webosose/build-webos"
 BUILD_LAYERS=("webosose/meta-webosose")
@@ -201,22 +201,34 @@ function check_project_vars {
   echo "$ldesc"
 }
 
+function unset_buildhistory_commit {
+  [ -f webos-local.conf ] && sed -i '/BUILDHISTORY_COMMIT/d' webos-local.conf
+  echo "BUILDHISTORY_COMMIT = \"0\"" >> webos-local.conf
+}
+
+function set_buildhistory_commit {
+  [ -f webos-local.conf ] && sed -i '/BUILDHISTORY_COMMIT/d' webos-local.conf
+  echo "BUILDHISTORY_COMMIT = \"1\"" >> webos-local.conf
+}
+
 function generate_webos_bom {
   MACHINE=$1
   I=$2
   F=$3
 
   rm -f webos-bom.json
-  /usr/bin/time -f "$TIME_STR" bitbake -c write_bom ${I} 2>&1 | tee /dev/stderr | grep '^TIME:' >> ${BUILD_TIME_LOG}
+  rm -f webos-bom-sort.json
+  unset_buildhistory_commit
+  /usr/bin/time -f "$TIME_STR" bitbake --runall=write_bom_data ${I} 2>&1 | tee /dev/stderr | grep '^TIME:' >> ${BUILD_TIME_LOG}
   [ -d ${ARTIFACTS}/${MACHINE}/${I} ] || mkdir -p ${ARTIFACTS}/${MACHINE}/${I}
-  sort webos-bom.json > ${ARTIFACTS}/${MACHINE}/${I}/${F}
-  rm -f webos-bom.json
+  sort webos-bom.json > webos-bom-sort.json
+  sed -e '1s/^{/[{/' -e '$s/,$/]/' webos-bom-sort.json > ${ARTIFACTS}/${MACHINE}/${I}/${F}
 }
 
 function filter_images {
   FILTERED_IMAGES=""
   # remove images which aren't available for some MACHINEs
-  # no restriction in webos-pro
+  # no restriction in webos
   FILTERED_IMAGES="${IMAGES}"
   if [ -n "${IMAGES}" -a -z "${FILTERED_IMAGES}" ] ; then
     echo "ERROR: All images were filtered for MACHINE: '${MACHINE}', IMAGES: '${IMAGES}'"
@@ -225,6 +237,7 @@ function filter_images {
 
 function call_bitbake {
   filter_images
+  set_buildhistory_commit
   /usr/bin/time -f "$TIME_STR" bitbake ${BBFLAGS} ${FILTERED_IMAGES} ${TARGETS} 2>&1 | tee /dev/stderr | grep '^TIME:' >> ${BUILD_TIME_LOG}
 
   # Be aware that non-zero exit code from bitbake doesn't always mean that images weren't created.
@@ -249,7 +262,11 @@ function add_md5sums_and_buildhistory_artifacts {
                     ${ARTIFACTS}/${MACHINE}/${I}/*.tar.gz \
                     ${ARTIFACTS}/${MACHINE}/${I}/*.tar.bz2 \
                     ${ARTIFACTS}/${MACHINE}/${I}/*.rpi-sdimg \
+                    ${ARTIFACTS}/${MACHINE}/${I}/*.rpi-sdimg.gz \
+                    ${ARTIFACTS}/${MACHINE}/${I}/*.wic \
+                    ${ARTIFACTS}/${MACHINE}/${I}/*.wic.gz \
                     ${ARTIFACTS}/${MACHINE}/${I}/*.zip \
+                    ${ARTIFACTS}/${MACHINE}/${I}/*.vfat \
                     ${ARTIFACTS}/${MACHINE}/*.fastboot \
                     ${ARTIFACTS}/${MACHINE}/${I}/*.fastboot \
                     ${ARTIFACTS}/${MACHINE}/${I}/*.epk \
@@ -306,11 +323,12 @@ function add_buildhistory_artifacts {
       # manager.addInfoBadge("${manager.build.getWorkspace().child('BUILD-ARTIFACTS/build-id.txt').readToString()}")
       # in all builds (making BUILD_IMAGES/BUILD_MACHINE changes less error-prone)
       FIRST_IMAGE="${MACHINE}/${I}"
-      ln -vnf ${ARTIFACTS}/${BHMACHINE}/${I}/build-id.txt ${ARTIFACTS}/build-id.txt
+      ln -vnf ${ARTIFACTS}/${MACHINE}/${I}/build-id.txt ${ARTIFACTS}/build-id.txt
     fi
     ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/image-info.txt ${ARTIFACTS}/${MACHINE}/${I}/image-info.txt
     ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/files-in-image.txt ${ARTIFACTS}/${MACHINE}/${I}/files-in-image.txt
     ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/installed-packages.txt ${ARTIFACTS}/${MACHINE}/${I}/installed-packages.txt
+    ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/installed-package-names.txt ${ARTIFACTS}/${MACHINE}/${I}/installed-package-names.txt
     ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/installed-package-sizes.txt ${ARTIFACTS}/${MACHINE}/${I}/installed-package-sizes.txt
     if [ -e buildhistory/images/${BHMACHINE}/glibc/${I}/installed-package-file-sizes.txt ] ; then
       ln -vn buildhistory/images/${BHMACHINE}/glibc/${I}/installed-package-file-sizes.txt ${ARTIFACTS}/${MACHINE}/${I}/installed-package-file-sizes.txt
@@ -393,6 +411,20 @@ function move_artifacts {
       if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.gz >/dev/null 2>/dev/null; then
         ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.gz ${ARTIFACTS}/${MACHINE}/${I}/
       fi
+      if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 >/dev/null 2>/dev/null; then
+        ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 ${ARTIFACTS}/${MACHINE}/${I}/
+      fi
+      if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.vfat >/dev/null 2>/dev/null; then
+        ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.vfat ${ARTIFACTS}/${MACHINE}/${I}/
+      fi
+    elif ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.wic >/dev/null 2>/dev/null; then
+      if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.wic >/dev/null 2>/dev/null; then
+        gzip -f BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.wic
+        ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.wic.gz ${ARTIFACTS}/${MACHINE}/${I}/
+      fi
+      if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 >/dev/null 2>/dev/null; then
+        ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 ${ARTIFACTS}/${MACHINE}/${I}/
+      fi
     elif ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.gz >/dev/null 2>/dev/null \
       || ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.fastboot >/dev/null 2>/dev/null \
       || ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.epk    >/dev/null 2>/dev/null; then
@@ -413,7 +445,7 @@ function move_artifacts {
       if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.epk >/dev/null 2>/dev/null; then
         ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.epk ${ARTIFACTS}/${MACHINE}/${I}/
       fi
-    elif       BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 >/dev/null 2>/dev/null \
+    elif ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 >/dev/null 2>/dev/null \
       || ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.zip >/dev/null 2>/dev/null; then
       if ls    BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 >/dev/null 2>/dev/null; then
         ln -vn BUILD/deploy/images/${MACHINE}/${I}-${MACHINE}-*.tar.bz2 ${ARTIFACTS}/${MACHINE}/${I}/
@@ -430,6 +462,18 @@ function move_artifacts {
       fi
     else
       echo "WARN: No ${I} images with recognized IMAGE_FSTYPES found to copy as build artifacts"
+    fi
+
+    if ls    BUILD/deploy/images/${MACHINE}/${I}-oss-pkg-info.yaml >/dev/null 2>/dev/null; then
+      ln -vn BUILD/deploy/images/${MACHINE}/${I}-oss-pkg-info.yaml ${ARTIFACTS}/${MACHINE}/${I}/oss-pkg-info.yaml
+    else
+      echo "WARN: No oss-pkg-info.yaml to copy as build artifacts"
+    fi
+
+    if ls    BUILD/deploy/images/${MACHINE}/${I}-dependency.json >/dev/null 2>/dev/null; then
+      ln -vn BUILD/deploy/images/${MACHINE}/${I}-dependency.json ${ARTIFACTS}/${MACHINE}/${I}/dependency.json
+    else
+      echo "WARN: No dependency.json to copy as build artifacts"
     fi
 
     # delete possibly empty directories
@@ -646,7 +690,7 @@ else
     done
   fi
 
-  grep -R "Elapsed time" BUILD/buildstats | sed 's/^.*\/\(.*\): Elapsed time: \(.*\)$/\2 \1/g' | sort -n | tail -n 20 | tee -a ${ARTIFACTS}/top20buildstats.txt
+  grep -R "Elapsed time" BUILD/buildstats | sed 's/^.*\/\([^\/]*\/[^\/]*\):Elapsed time: \(.*\)$/\2 \1/g' | sort -n | tail -n 20 | tee -a ${ARTIFACTS}/top20buildstats.txt
   tar cjf ${ARTIFACTS}/buildstats.tar.bz2 BUILD/buildstats
   if [ -e BUILD/qa.log ]; then
     ln -vn BUILD/qa.log ${ARTIFACTS} || true
